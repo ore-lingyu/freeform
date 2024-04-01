@@ -1,0 +1,59 @@
+Index: core/java/com/android/internal/policy/TaskResizingAlgorithm.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/core/java/com/android/internal/policy/TaskResizingAlgorithm.java b/core/java/com/android/internal/policy/TaskResizingAlgorithm.java
+--- a/core/java/com/android/internal/policy/TaskResizingAlgorithm.java	(revision 57c0b3698d1b2903c5fa53489be14f2e21129351)
++++ b/core/java/com/android/internal/policy/TaskResizingAlgorithm.java	(revision f95ddb5766067a975d86f34a9b6b265c0033e2e2)
+@@ -19,6 +19,7 @@
+ import android.annotation.IntDef;
+ import android.graphics.Point;
+ import android.graphics.Rect;
++import android.util.Log;
+ 
+ import com.android.internal.annotations.VisibleForTesting;
+ 
+@@ -54,6 +55,8 @@
+     @VisibleForTesting
+     public static final float MIN_ASPECT = 1.2f;
+ 
++    public static final float MAX_RATIO = 0.65f;
++
+     /**
+      * Given a (x, y) point and its original starting down point and its original bounds, calculate
+      * and return a new resized bound.
+@@ -162,7 +165,7 @@
+         }
+ 
+         // Generate the final bounds by keeping the opposite drag edge constant.
+-        if ((ctrlType & CTRL_LEFT) != 0) {
++        /*if ((ctrlType & CTRL_LEFT) != 0) {
+             left = right - width;
+         } else { // Note: The right might have changed - if we pulled at the right or not.
+             right = left + width;
+@@ -171,7 +174,24 @@
+             top = bottom - height;
+         } else { // Note: The height might have changed - if we pulled at the bottom or not.
+             bottom = top + height;
++        }*/
++
++        if( (ctrlType & CTRL_BOTTOM) != 0 ){
++            if(height > MAX_RATIO * maxVisibleSize.y){
++                height = (int)(MAX_RATIO * maxVisibleSize.y);
++            }
++
++            bottom = top + height;
++            float scale = (float) originalBounds.width() / (float) originalBounds.height();
++            int newWidth = (int)(height * scale);
++            left = left - (newWidth - originalBounds.width()) / 2;
++            right = left + newWidth;
++
++            Log.i("TestFreeForm", "TaskResizingAlgorithm scale  " + scale);
++            Rect newRect = new Rect(left, top, right,bottom);
++            Log.i("TestFreeForm", "TaskResizingAlgorithm newRect  " + newRect );
+         }
++
+         return new Rect(left, top, right, bottom);
+     }
+ }

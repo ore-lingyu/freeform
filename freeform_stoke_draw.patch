@@ -1,0 +1,135 @@
+Subject: [PATCH] freeform stoke draw
+---
+Index: core/java/android/view/ViewRootImpl.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/core/java/android/view/ViewRootImpl.java b/core/java/android/view/ViewRootImpl.java
+--- a/core/java/android/view/ViewRootImpl.java	(revision 728d1b80c5236dfaa614ed3c0e46393e822121dd)
++++ b/core/java/android/view/ViewRootImpl.java	(revision 81c76e03af74c6ef09ddefbc8e78c38e09ec204c)
+@@ -10167,6 +10167,14 @@
+             if (viewAncestor != null) {
+                 final View view = viewAncestor.mView;
+                 if (view != null) {
++                    if(null != command && command.contains("freeFormSide")){
++                        boolean show = command.equals("freeFormSideShow");
++                        if(view instanceof DecorView){
++                            ((DecorView) view).setFreeFormSideShow(show);
++                        }
++                        return;
++                    }
++
+                     if (checkCallingPermission(Manifest.permission.DUMP) !=
+                             PackageManager.PERMISSION_GRANTED) {
+                         throw new SecurityException("Insufficient permissions to invoke"
+Index: core/java/com/android/internal/policy/DecorView.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/core/java/com/android/internal/policy/DecorView.java b/core/java/com/android/internal/policy/DecorView.java
+--- a/core/java/com/android/internal/policy/DecorView.java	(revision 728d1b80c5236dfaa614ed3c0e46393e822121dd)
++++ b/core/java/com/android/internal/policy/DecorView.java	(revision 81c76e03af74c6ef09ddefbc8e78c38e09ec204c)
+@@ -372,6 +372,18 @@
+                 mStatusColorViewState.view, mNavigationColorViewState.view);
+     }
+ 
++    public void setFreeFormSideShow(boolean show){
++        if(null != mDecorCaptionView){
++            mDecorCaptionView.mNeedDrawRect = show;
++            post(new Runnable() {
++                @Override
++                public void run() {
++                    mDecorCaptionView.invalidate();
++                }
++            });
++        }
++    }
++
+     @Override
+     public boolean dispatchKeyEvent(KeyEvent event) {
+         final int keyCode = event.getKeyCode();
+Index: core/java/com/android/internal/widget/DecorCaptionView.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/core/java/com/android/internal/widget/DecorCaptionView.java b/core/java/com/android/internal/widget/DecorCaptionView.java
+--- a/core/java/com/android/internal/widget/DecorCaptionView.java	(revision 728d1b80c5236dfaa614ed3c0e46393e822121dd)
++++ b/core/java/com/android/internal/widget/DecorCaptionView.java	(revision 81c76e03af74c6ef09ddefbc8e78c38e09ec204c)
+@@ -17,6 +17,9 @@
+ package com.android.internal.widget;
+ 
+ import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Paint;
+ import android.graphics.Rect;
+ import android.util.AttributeSet;
+ import android.view.GestureDetector;
+@@ -310,6 +313,22 @@
+                 mClose.getRight(), mClose.getBottom());
+     }
+ 
++    public boolean mNeedDrawRect = false;
++    @Override
++    protected void dispatchDraw(Canvas canvas){
++        super.dispatchDraw(canvas);
++        if(mNeedDrawRect){
++            Paint paint = new Paint();
++            paint.setColor(Color.RED);
++            paint.setAntiAlias(true);
++            paint.setStrokeWidth(20);
++            paint.setStyle(Paint.Style.STROKE);
++            Rect rect = new Rect(0, 0, getWidth(), getHeight());
++            canvas.drawRect(rect,paint);
++        }
++    }
++
++
+     /**
+      * Updates the visibility of the caption.
+      **/
+Index: services/core/java/com/android/server/wm/TaskPositioningController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/TaskPositioningController.java b/services/core/java/com/android/server/wm/TaskPositioningController.java
+--- a/services/core/java/com/android/server/wm/TaskPositioningController.java	(revision 728d1b80c5236dfaa614ed3c0e46393e822121dd)
++++ b/services/core/java/com/android/server/wm/TaskPositioningController.java	(revision 81c76e03af74c6ef09ddefbc8e78c38e09ec204c)
+@@ -182,9 +182,18 @@
+                 false /* isDragDrop */)) {
+             Log.i("TestFreeForm", "startPositioningLocked  : Unable to transfer touch focus" );
+             Slog.e(TAG_WM, "startPositioningLocked: Unable to transfer touch focus");
+-//            cleanUpTaskPositioner();
+-//            return false;
++            cleanUpTaskPositioner();
++            return false;
+         }
++
++        if(resize){
++            try{
++                win.mClient.executeCommand("freeFormSideShow", null, null);
++            }catch (Exception e){
++
++            }
++        }
++
+ 
+         mTaskPositioner.startDrag(resize, preserveOrientation, startX, startY);
+         return true;
+@@ -200,6 +209,12 @@
+     void finishTaskPositioning() {
+         // TaskPositioner attaches the InputEventReceiver to the animation thread. We need to
+         // dispose the receiver on the same thread to avoid race conditions.
++            try{
++                mTaskPositioner.mWindow.mClient.executeCommand("freeFormSideHide",null,null);
++            }catch (Exception e){
++
++            }
++
+         mService.mAnimationHandler.post(() -> {
+             if (DEBUG_TASK_POSITIONING) Slog.d(TAG_WM, "finishPositioning");
+ 

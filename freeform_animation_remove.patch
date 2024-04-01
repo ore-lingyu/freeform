@@ -1,0 +1,22 @@
+Subject: [PATCH] freeform animation remove
+---
+Index: services/core/java/com/android/server/wm/WindowContainer.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/WindowContainer.java b/services/core/java/com/android/server/wm/WindowContainer.java
+--- a/services/core/java/com/android/server/wm/WindowContainer.java	(revision 81c76e03af74c6ef09ddefbc8e78c38e09ec204c)
++++ b/services/core/java/com/android/server/wm/WindowContainer.java	(revision 854901926c845b57b3748d5da6e46e11b5d8ac7a)
+@@ -2960,6 +2960,11 @@
+      */
+     Pair<AnimationAdapter, AnimationAdapter> getAnimationAdapter(WindowManager.LayoutParams lp,
+             @TransitionOldType int transit, boolean enter, boolean isVoiceInteraction) {
++        if(null != this.asTask() && this.asTask().inFreeformWindowingMode() ){
++            this.asTask().initFreeformPosition();
++            return new Pair<>(null, null);
++        }
++
+         final Pair<AnimationAdapter, AnimationAdapter> resultAdapters;
+         final int appRootTaskClipMode = getDisplayContent().mAppTransition.getAppRootTaskClipMode();
+ 

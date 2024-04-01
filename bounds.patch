@@ -1,0 +1,344 @@
+Index: services/core/java/com/android/server/wm/TaskFragment.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/TaskFragment.java b/services/core/java/com/android/server/wm/TaskFragment.java
+--- a/services/core/java/com/android/server/wm/TaskFragment.java	(revision 57c0b3698d1b2903c5fa53489be14f2e21129351)
++++ b/services/core/java/com/android/server/wm/TaskFragment.java	(revision f95ddb5766067a975d86f34a9b6b265c0033e2e2)
+@@ -77,12 +77,14 @@
+ import android.app.servertransaction.PauseActivityItem;
+ import android.app.servertransaction.ResumeActivityItem;
+ import android.content.res.Configuration;
++import android.graphics.Matrix;
+ import android.graphics.Point;
+ import android.graphics.Rect;
+ import android.os.IBinder;
+ import android.os.RemoteException;
+ import android.os.UserHandle;
+ import android.util.DisplayMetrics;
++import android.util.Log;
+ import android.util.Slog;
+ import android.util.proto.ProtoOutputStream;
+ import android.view.DisplayInfo;
+@@ -2347,6 +2349,95 @@
+         if (mTaskFragmentOrganizer != null) {
+             updateOrganizedTaskFragmentSurfaceSize(t, true /* forceUpdate */);
+         }
++        initFreeFormSurfaceBounds();
++    }
++
++    /*public void onRequestedOverrideConfigurationChanged(Configuration overrideConfiguration) {
++        if(null!=mFreeFormSurfaceBounds && inFreeformWindowingMode()){
++            if(overrideConfiguration.windowConfiguration.getBounds().right != 1440 || overrideConfiguration.windowConfiguration.getBounds().bottom != 2960){
++                overrideConfiguration.windowConfiguration.setBounds(mFreeFormSurfaceBounds);
++            }
++        }
++        super.onRequestedOverrideConfigurationChanged(overrideConfiguration);
++    }*/
++
++    Rect mFreeFormSurfaceBounds;
++
++    Rect getFreeFormSurfaceBounds(Rect rect){
++        if(null != mFreeFormSurfaceBounds && null != rect){
++//            Log.i("TestFreeForm", "getFreeFormSurfaceBounds bounds " + mFreeFormSurfaceBounds);
++            rect.set(mFreeFormSurfaceBounds);
++        }
++        return rect;
++    }
++
++    void setFreeFormSurfaceBounds(Rect bounds){
++        if(null != mFreeFormSurfaceBounds && null != bounds){
++            Log.i("TestFreeForm", "setFreeFormSurfaceBounds bounds " + bounds);
++            mFreeFormSurfaceBounds.set(bounds);
++        }
++    }
++
++    void initFreeFormSurfaceBounds(){
++        if(null == mFreeFormSurfaceBounds
++                && getBounds().left == 0 && getBounds().width() == getMaxBounds().width()
++                && inFreeformWindowingMode()){
++
++            mFreeFormSurfaceBounds = new Rect();
++            mFreeFormSurfaceBounds.set(getBounds());
++            mFreeFormSurfaceBounds.scale(0.6f);
++//            mFreeFormSurfaceBounds.offset((int)(getBounds().width() * 0.1f), getBounds().top - mFreeFormSurfaceBounds.top);
++            mFreeFormSurfaceBounds.offset((int)(getBounds().width() * 0.2f), (int) ( (getMaxBounds().height() - mFreeFormSurfaceBounds.height()) / 3 ));
++            Log.i("TestFreeForm", "initFreeFormSurfaceBounds mFreeFormSurfaceBounds " +mFreeFormSurfaceBounds );
++        }
++        updateShowByFreeFormSurfaceBounds();
++//        initFreeformPosition();
++//        updateSurfaceSizeNew(getSyncTransaction());
++    }
++
++    void initFreeformPosition() {
++        if (getBounds().left == 0 && getBounds().width() == getMaxBounds().width()
++                && getWindowingMode() == WINDOWING_MODE_FREEFORM) {
++            SurfaceControl.Transaction t = getSyncTransaction();
++            Matrix matrix = new Matrix();
++            matrix.reset();
++            matrix.postScale(0.5f, 0.5f);
++            matrix.postTranslate(getBounds().width() * 0.5f * 0.5f, getBounds().top);
++            if (mFreeFormSurfaceBounds == null) {
++                mFreeFormSurfaceBounds = new Rect();
++            }
++            mFreeFormSurfaceBounds.set(getBounds());
++            mFreeFormSurfaceBounds.scale(0.5f);
++            int deta = 0;
++            if (mFreeFormSurfaceBounds.top < getBounds().top) {
++                deta = getBounds().top - mFreeFormSurfaceBounds.top;
++            }
++            mFreeFormSurfaceBounds.offset((int) (getBounds().width() * 0.5f * 0.5f), deta);
++            t.setMatrix(getSurfaceControl(), matrix, new float[9]);
++            t.apply();
++            android.util.Log.i("lsm33", "initFreeformPosition mFreeFormSurfaceBound = " + mFreeFormSurfaceBounds + " getBounds " + getBounds());
++        }
++    }
++
++    void updateShowByFreeFormSurfaceBounds() {
++        if (inFreeformWindowingMode()) {
++            Log.i("TestFreeForm", "updateShowByFreeFormSurfaceBounds mFreeFormSurfaceBounds " +mFreeFormSurfaceBounds );
++
++            SurfaceControl.Transaction transaction = getSyncTransaction();
++            /*float scalex = (float) mFreeFormSurfaceBounds.width() / (float) getBounds().width();
++            float scaley = (float) mFreeFormSurfaceBounds.height() / (float) getBounds().height();
++            Matrix matrix = new Matrix();
++            matrix.setScale(scalex, scaley);
++            matrix.postTranslate(mFreeFormSurfaceBounds.left, mFreeFormSurfaceBounds.top);
++            transaction.setMatrix(getSurfaceControl(), matrix, new float[9]);*/
++
++            float scale = (float) mFreeFormSurfaceBounds.width() / (float) getBounds().width();
++            transaction.setScale(getSurfaceControl(), scale, scale);
++            transaction.setPosition(getSurfaceControl(), mFreeFormSurfaceBounds.left, mFreeFormSurfaceBounds.top);
++            transaction.apply();
++
++            mAtmService.mWindowManager.getDefaultDisplayContentLocked().updateTouchExcludeRegion();
++        }
+     }
+ 
+     /** Whether we should prepare a transition for this {@link TaskFragment} bounds change. */
+@@ -2765,6 +2856,11 @@
+         if (!bounds.isEmpty()) {
+             pw.println(prefix + "  mBounds=" + bounds);
+         }
++
++        if(inFreeformWindowingMode() && null != mFreeFormSurfaceBounds){
++            pw.println(prefix + "  mFreeFormSurfaceBounds=" + mFreeFormSurfaceBounds);
++        }
++
+         if (mIsRemovalRequested) {
+             pw.println(prefix + "  mIsRemovalRequested=true");
+         }
+Index: services/core/java/com/android/server/wm/Task.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/Task.java b/services/core/java/com/android/server/wm/Task.java
+--- a/services/core/java/com/android/server/wm/Task.java	(revision 57c0b3698d1b2903c5fa53489be14f2e21129351)
++++ b/services/core/java/com/android/server/wm/Task.java	(revision f95ddb5766067a975d86f34a9b6b265c0033e2e2)
+@@ -763,6 +763,12 @@
+         mAtmService.deferWindowLayout();
+ 
+         try {
++            if(inFreeformWindowingMode()){
++                setFreeFormSurfaceBounds(bounds);
++                updateShowByFreeFormSurfaceBounds();
++                return true;
++            }
++
+             final boolean forced = (resizeMode & RESIZE_MODE_FORCED) != 0;
+ 
+             if (getParent() == null) {
+@@ -3415,7 +3421,13 @@
+         info.defaultMinSize = mDisplayContent == null
+                 ? DEFAULT_MIN_TASK_SIZE_DP : mDisplayContent.mMinSizeOfResizeableTaskDp;
+         info.positionInParent = getRelativePosition();
+-
++        if(inFreeformWindowingMode()){
++            if(null == mFreeFormSurfaceBounds){
++                initFreeFormSurfaceBounds();
++            }
++            info.positionInParent.x = mFreeFormSurfaceBounds.left;
++            info.positionInParent.y = mFreeFormSurfaceBounds.top;
++        }
+         info.topActivityInfo = top != null ? top.info : null;
+         info.pictureInPictureParams = getPictureInPictureParams(top);
+         info.launchIntoPipHostTaskId = (info.pictureInPictureParams != null
+Index: services/core/java/com/android/server/wm/DisplayContent.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/DisplayContent.java b/services/core/java/com/android/server/wm/DisplayContent.java
+--- a/services/core/java/com/android/server/wm/DisplayContent.java	(revision 57c0b3698d1b2903c5fa53489be14f2e21129351)
++++ b/services/core/java/com/android/server/wm/DisplayContent.java	(revision f95ddb5766067a975d86f34a9b6b265c0033e2e2)
+@@ -3138,7 +3138,11 @@
+         if (task.isActivityTypeHome() && task.isVisible() && task.isResizeable()) {
+             task.getDisplayArea().getBounds(mTmpRect);
+         } else {
+-            task.getDimBounds(mTmpRect);
++            if(task.inFreeformWindowingMode()){
++                task.getFreeFormSurfaceBounds(mTmpRect);
++            }else{
++                task.getDimBounds(mTmpRect);
++            }
+         }
+ 
+         if (task == focusedTask) {
+@@ -4960,7 +4964,7 @@
+                 return true;
+             }
+ 
+-            if (task.isOrganized()) {
++            if (task.isOrganized() && !task.inFreeformWindowingMode()) {
+                 return true;
+             }
+ 
+@@ -4969,11 +4973,14 @@
+             // bounds because it might be adjusted to fit the content frame. One example is when
+             // the task is put to top-left quadrant, the actual visible area would not start at
+             // (0,0) after it's adjusted for the status bar.
+-            task.getDimBounds(mTmpRect);
++            if(task.inFreeformWindowingMode()){
++                task.getFreeFormSurfaceBounds(mTmpRect);
++            }else{
++                task.getDimBounds(mTmpRect);
++            }
+             mTmpRect.inset(-delta, -delta);
+             if (mTmpRect.contains(x, y)) {
+                 mTmpRect.inset(delta, delta);
+-
+                 if (!mTmpRect.contains(x, y)) {
+                     taskForResize = task;
+                     return true;
+Index: services/core/java/com/android/server/wm/TaskPositioningController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/TaskPositioningController.java b/services/core/java/com/android/server/wm/TaskPositioningController.java
+--- a/services/core/java/com/android/server/wm/TaskPositioningController.java	(revision 57c0b3698d1b2903c5fa53489be14f2e21129351)
++++ b/services/core/java/com/android/server/wm/TaskPositioningController.java	(revision f95ddb5766067a975d86f34a9b6b265c0033e2e2)
+@@ -22,6 +22,8 @@
+ import android.annotation.Nullable;
+ import android.graphics.Point;
+ import android.graphics.Rect;
++import android.graphics.Region;
++import android.util.Log;
+ import android.util.Slog;
+ import android.view.Display;
+ import android.view.IWindow;
+@@ -117,12 +119,14 @@
+         mService.mH.post(() -> {
+             synchronized (mService.mGlobalLock) {
+                 final Task task = displayContent.findTaskForResizePoint(x, y);
++                Log.i("TestFreeForm", "handleTapOutsideTask  task "  +task );
+                 if (task != null) {
+                     if (!task.isResizeable()) {
+                         // The task is not resizable, so don't do anything when the user drags the
+                         // the resize handles.
+                         return;
+                     }
++                    Log.i("TestFreeForm", "handleTapOutsideTask  startPositioningLocked" );
+                     if (!startPositioningLocked(task.getTopVisibleAppMainWindow(), true /*resize*/,
+                             task.preserveOrientationOnResize(), x, y)) {
+                         return;
+@@ -135,6 +139,7 @@
+ 
+     private boolean startPositioningLocked(WindowState win, boolean resize,
+             boolean preserveOrientation, float startX, float startY) {
++        Log.i("TestFreeForm", "TaskPositioningController  startPositioningLocked" );
+         if (DEBUG_TASK_POSITIONING)
+             Slog.d(TAG_WM, "startPositioningLocked: "
+                     + "win=" + win + ", resize=" + resize + ", preserveOrientation="
+@@ -169,12 +174,16 @@
+                 && displayContent.mCurrentFocus.mActivityRecord == win.mActivityRecord) {
+             transferFocusFromWin = displayContent.mCurrentFocus;
+         }
++
++        Log.i("TestFreeForm", "startPositioningLocked transferFocusFromWin name token" + transferFocusFromWin.mInputChannel.getName()+ "  "+ transferFocusFromWin.mInputChannel.getToken() );
++
+         if (!mService.mInputManager.transferTouchFocus(
+                 transferFocusFromWin.mInputChannel, mTaskPositioner.mClientChannel,
+                 false /* isDragDrop */)) {
++            Log.i("TestFreeForm", "startPositioningLocked  : Unable to transfer touch focus" );
+             Slog.e(TAG_WM, "startPositioningLocked: Unable to transfer touch focus");
+-            cleanUpTaskPositioner();
+-            return false;
++//            cleanUpTaskPositioner();
++//            return false;
+         }
+ 
+         mTaskPositioner.startDrag(resize, preserveOrientation, startX, startY);
+@@ -182,6 +191,7 @@
+     }
+ 
+     public void finishTaskPositioning(IWindow window) {
++        Log.i("TestFreeForm", "TaskPositioningController  finishTaskPositioning \n" );
+         if (mTaskPositioner != null && mTaskPositioner.mClientCallback == window.asBinder()) {
+             finishTaskPositioning();
+         }
+Index: services/core/java/com/android/server/wm/TaskPositioner.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/TaskPositioner.java b/services/core/java/com/android/server/wm/TaskPositioner.java
+--- a/services/core/java/com/android/server/wm/TaskPositioner.java	(revision 57c0b3698d1b2903c5fa53489be14f2e21129351)
++++ b/services/core/java/com/android/server/wm/TaskPositioner.java	(revision f95ddb5766067a975d86f34a9b6b265c0033e2e2)
+@@ -137,7 +137,11 @@
+                 }
+                 synchronized (mService.mGlobalLock) {
+                     mDragEnded = notifyMoveLocked(newX, newY);
+-                    mTask.getDimBounds(mTmpRect);
++                    if(mTask.inFreeformWindowingMode()){
++                        mTask.getFreeFormSurfaceBounds(mTmpRect);
++                    }else{
++                        mTask.getDimBounds(mTmpRect);
++                    }
+                 }
+                 if (!mTmpRect.equals(mWindowDragBounds)) {
+                     Trace.traceBegin(TRACE_TAG_WINDOW_MANAGER,
+@@ -307,7 +311,11 @@
+         // multiple app windows. Don't use any bounds from win itself as it
+         // may not be the same size as the task.
+         final Rect startBounds = mTmpRect;
+-        mTask.getBounds(startBounds);
++        if(mTask.inFreeformWindowingMode()){
++             mTask.getFreeFormSurfaceBounds(startBounds);
++        }else{
++            mTask.getBounds(startBounds);
++        }
+ 
+         mCtrlType = CTRL_NONE;
+         mStartDragX = startX;
+Index: services/core/java/com/android/server/wm/TaskTapPointerEventListener.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/services/core/java/com/android/server/wm/TaskTapPointerEventListener.java b/services/core/java/com/android/server/wm/TaskTapPointerEventListener.java
+--- a/services/core/java/com/android/server/wm/TaskTapPointerEventListener.java	(revision 57c0b3698d1b2903c5fa53489be14f2e21129351)
++++ b/services/core/java/com/android/server/wm/TaskTapPointerEventListener.java	(revision f95ddb5766067a975d86f34a9b6b265c0033e2e2)
+@@ -25,6 +25,7 @@
+ import android.graphics.Rect;
+ import android.graphics.Region;
+ import android.hardware.input.InputManager;
++import android.util.Log;
+ import android.view.InputDevice;
+ import android.view.MotionEvent;
+ import android.view.WindowManagerPolicyConstants.PointerEventListener;
+@@ -73,8 +74,12 @@
+                     y = (int) motionEvent.getY();
+                 }
+ 
++                //放大缩小
+                 synchronized (this) {
++                    Log.i("TestFreeForm", "TaskTapPointerEventListener onPointerEvent ACTION_DOWN x y " + x +" "+y);
++                    Log.i("TestFreeForm", "TaskTapPointerEventListener onPointerEvent ACTION_DOWN mTouchExcludeRegion " + mTouchExcludeRegion);
+                     if (!mTouchExcludeRegion.contains(x, y)) {
++                        Log.i("TestFreeForm", "TaskTapPointerEventListener onPointerEvent  handleTapOutsideTask " );
+                         mService.mTaskPositioningController.handleTapOutsideTask(
+                                 mDisplayContent, x, y);
+                     }
